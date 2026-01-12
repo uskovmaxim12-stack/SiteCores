@@ -1,10 +1,12 @@
 class SiteCoreDatabase {
     constructor() {
-        this.DB_CONFIG = {
-            GIST_ID: localStorage.getItem('sitecore_gist_id') || 'YOUR_GIST_ID_HERE',
-            GITHUB_TOKEN: localStorage.getItem('sitecore_github_token') || 'YOUR_GITHUB_TOKEN_HERE',
-            SYNC_ENABLED: true
-        };
+    this.DB_CONFIG = {
+        GIST_ID: '81306e89ee7198a8b6b0ff8fc00fe5f9',
+        GITHUB_TOKEN: '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',
+        SYNC_ENABLED: true
+    };
+    // ... остальной код
+}
         
         this.data = null;
         this.syncQueue = [];

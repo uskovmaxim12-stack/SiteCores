@@ -156,4 +156,198 @@ class SiteCoreDatabase {
             case 'addOrder':
                 await this.addOrder(operation.data, operation.message);
                 break;
-           
+            case 'updateOrder':
+                await this.updateOrder(operation.orderId, operation.updates);
+                break;
+            case 'updateOrderStatus':
+                await this.updateOrderStatus(operation.orderId, operation.status);
+                break;
+            case 'addMessage':
+                await this.addMessage(operation.message);
+                break;
+            case 'deleteOrder':
+                await this.deleteOrder(operation.orderId);
+                break;
+        }
+    }
+
+    async save() {
+        this.saveToLocalStorage();
+        
+        // Добавляем в очередь синхронизации
+        this.syncQueue.push({
+            type: 'save',
+            timestamp: new Date().toISOString()
+        });
+        
+        // Запускаем синхронизацию
+        this.syncWithRemote();
+    }
+
+    getData() {
+        return this.data;
+    }
+
+    getInitialDataStructure() {
+        return {
+            users: {
+                clients: [],
+                developers: [
+                    {
+                        id: 'dev_1',
+                        name: 'Максим',
+                        password: '140612',
+                        avatar: 'М',
+                        email: 'maxim@sitecore.ru'
+                    },
+                    {
+                        id: 'dev_2',
+                        name: 'Александр',
+                        password: '789563',
+                        avatar: 'А',
+                        email: 'alexander@sitecore.ru'
+                    }
+                ]
+            },
+            orders: [],
+            messages: []
+        };
+    }
+
+    // CRUD операции для заказов
+    async addOrder(order, systemMessage = null) {
+        if (!this.data.orders) {
+            this.data.orders = [];
+        }
+        
+        this.data.orders.push(order);
+        
+        if (systemMessage) {
+            await this.addMessage(systemMessage);
+        }
+        
+        await this.save();
+        return order.id;
+    }
+
+    async updateOrder(orderId, updates) {
+        const orderIndex = this.data.orders.findIndex(o => o.id === orderId);
+        if (orderIndex === -1) {
+            throw new Error('Order not found');
+        }
+        
+        this.data.orders[orderIndex] = {
+            ...this.data.orders[orderIndex],
+            ...updates
+        };
+        
+        await this.save();
+    }
+
+    async updateOrderStatus(orderId, status) {
+        await this.updateOrder(orderId, {
+            status: status,
+            updatedAt: new Date().toISOString()
+        });
+    }
+
+    async deleteOrder(orderId) {
+        // Удаляем заказ
+        this.data.orders = this.data.orders.filter(o => o.id !== orderId);
+        
+        // Удаляем связанные сообщения
+        this.data.messages = this.data.messages.filter(m => m.orderId !== orderId);
+        
+        await this.save();
+    }
+
+    // CRUD операции для сообщений
+    async addMessage(message) {
+        if (!this.data.messages) {
+            this.data.messages = [];
+        }
+        
+        this.data.messages.push(message);
+        await this.save();
+        return message.id;
+    }
+
+    // Вспомогательные методы
+    getOrdersByClient(clientId) {
+        return this.data.orders.filter(order => order.clientId === clientId);
+    }
+
+    getOrdersByDeveloper(developerName) {
+        return this.data.orders.filter(order => order.assignedTo === developerName);
+    }
+
+    getMessagesByOrder(orderId) {
+        return this.data.messages
+            .filter(message => message.orderId === orderId)
+            .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+    }
+
+    // Конфигурация
+    setConfig(config) {
+        this.DB_CONFIG = { ...this.DB_CONFIG, ...config };
+        
+        if (config.GIST_ID) {
+            localStorage.setItem('sitecore_gist_id', config.GIST_ID);
+        }
+        
+        if (config.GITHUB_TOKEN) {
+            localStorage.setItem('sitecore_github_token', config.GITHUB_TOKEN);
+        }
+    }
+
+    getConfig() {
+        return { ...this.DB_CONFIG };
+    }
+
+    // Резервное копирование
+    exportData() {
+        return JSON.stringify(this.data, null, 2);
+    }
+
+    importData(jsonData) {
+        try {
+            const newData = JSON.parse(jsonData);
+            this.data = newData;
+            this.saveToLocalStorage();
+            this.saveToGist();
+            return true;
+        } catch (error) {
+            console.error('Import error:', error);
+            return false;
+        }
+    }
+
+    // Статистика
+    getStats() {
+        const totalOrders = this.data.orders.length;
+        const totalClients = this.data.users.clients.length;
+        const totalMessages = this.data.messages.length;
+        
+        const ordersByStatus = this.data.orders.reduce((acc, order) => {
+            acc[order.status] = (acc[order.status] || 0) + 1;
+            return acc;
+        }, {});
+        
+        const ordersByType = this.data.orders.reduce((acc, order) => {
+            acc[order.projectType] = (acc[order.projectType] || 0) + 1;
+            return acc;
+        }, {});
+        
+        return {
+            totalOrders,
+            totalClients,
+            totalMessages,
+            ordersByStatus,
+            ordersByType,
+            lastSync: this.lastSync
+        };
+    }
+}
+
+// Экспортируем глобально для использования в HTML файлах
+window.SiteCoreDatabase = SiteCoreDatabase;
